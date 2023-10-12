@@ -49,12 +49,6 @@ def aux_updatedict_gen(dicc,key,val):
         return new_dict
     
     
-# if "COSTO_CERO" in new_cmgs.keys():
-#     data=new_cmgs["COSTO_CERO"]
-#     new_cmgs.update({"COSTO_CERO":[0,periodo_marginacion+data[1]]})
-# else:
-#     new_cmgs.update({"COSTO_CERO":[0,periodo_marginacion]})
-
 central_estudio="150 MW parejo."
 
 #%%Inputs del programa
