@@ -46,6 +46,8 @@ def aux_updatedict_gen(dicc,key,val):
         dicc.update({key:val})
         return new_dict
     
+def marginal_sorted(dicc):
+    return dict(sorted(cx.items(), key=lambda x:x[1]))
     
 central_estudio="150 MW parejo."
 
@@ -134,15 +136,18 @@ for fecha in dicc_marginal.keys():
         # continue
     #Para cada fecha
     cx=dicc_marginal[fecha]
+    cx=marginal_sorted(cx)
     #Para cada central marginal distinta dentro del bloque intra-horario
     new_cmgs={}
     costo_marginal=0
     old_cmgs={}
+    periodo_marginacion_acumulado=0
     
     
     for central in cx.keys():
         #Periodo de marginación, hora del bloque
         periodo_marginacion=cx[central]
+        periodo_marginacion_acumulado+=periodo_marginacion
         hora=fecha[-2:]
         
         #Consideramos también la existencia de los mínimos técnicos.
@@ -468,7 +473,7 @@ for fecha in dicc_marginal.keys():
                 
     #Actualizamos diccionario de salida con el nuevo CMG y el antiguo                
     output.update({fecha:[sum([new_cmgs[key][0]*new_cmgs[key][1]/60 for key in new_cmgs.keys()]),costo_marginal]})
-        
+    #raise
 
 #% Visualization block
 import plotly.io as pio
