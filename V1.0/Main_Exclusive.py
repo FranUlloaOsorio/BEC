@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
 """
+Created on Mon Oct 16 20:55:51 2023
+
+@author: faull
+"""
+
+# -*- coding: utf-8 -*-
+"""
 Created on Sat Oct 14 09:10:01 2023
 
 @author: faull
@@ -47,7 +54,19 @@ def aux_updatedict_gen(dicc,key,val):
         return new_dict
     
 def marginal_sorted(dicc):
-    return dict(sorted(cx.items(), key=lambda x:x[1]))
+    ordered_dict = dict(sorted(dicc.items(), key=lambda x:x[1][1]))
+    reversed_dict = {}
+    while ordered_dict:
+        key, value = ordered_dict.popitem()
+        reversed_dict[key] = value
+    return reversed_dict
+    
+def resta_genpo(po,central,valor):
+    #Encuentra la central en la PO
+    idx=po_bloque.loc[po_bloque["Central"]==central].index[0]
+    #Asigna el valor de generación nuevo en la columna de generación restante.
+    po_bloque[po_bloque.columns[-1]][idx]=po_bloque[po_bloque.columns[-1]][idx]-valor
+    
     
 central_estudio="150 MW parejo."
 
@@ -65,12 +84,12 @@ df["Bloque_horario"]=(df["Mes"].astype(str)
                       +df["Día"].apply(lambda x:"%02d" % (x,)).astype(str)
                       +df["Hora"].apply(lambda x:"%02d" % (x,)).astype(str))
 dicc_marginal={}
-
 for bloque in df.groupby("Bloque_horario"):
     bloquehorario=bloque[0]
     resumen_marginales = bloque[1].pivot_table(index = [bloque[1].columns[4]],
                                                aggfunc ='size').to_dict()
     dicc_marginal.update({bloquehorario:resumen_marginales})
+
 
 Cmgs_horarios=[Regs_paths[file] for file in Regs_paths.keys() if ("cmg" in str(file).lower() and ".xlsx" in file)]
 
@@ -110,7 +129,7 @@ except:
     #Cuál es el costo marginal de la central de estudio
     cmg_central_estudio=300
     #Cuál es el mínimo técnico de la central de estudio
-    mintec_cx_estudio=0
+    mintec_cx_estudio=75
 
 print(sys.argv)
 print(cmg_central_estudio,mintec_cx_estudio)
@@ -126,171 +145,146 @@ alg_type=2
 #2-> Envía la central a mínimo técnico.
 costo_cero_alg=2
 
+#%%
 
 output={}
 gen_output={}
 for fecha in dicc_marginal.keys():
     # if not fecha in (["20230701"+"%02d" % (x,) for x in range(1,25)]):
     # +["20230702"+"%02d" % (x,) for x in range(1,25)]):
-    # if not fecha =="2023070101":
-        # continue
+    if not fecha =="2023070101":
+        continue
     #Para cada fecha
-    cx=dicc_marginal[fecha]
-    cx=marginal_sorted(cx)
+    cx=dicc_marginal[fecha].copy()
     #Para cada central marginal distinta dentro del bloque intra-horario
     new_cmgs={}
     costo_marginal=0
     old_cmgs={}
     periodo_marginacion_acumulado=0
     
+    hora=fecha[-2:]
+    PO_asociada=[POs_paths[x] for x in POs_paths.keys() if fecha[2:-2] in x][0]
+    df=pd.read_excel(PO_asociada,sheet_name="TCO",header=6)
+    pos_bloque=[df[df.columns[1+i*4:4+i*4]] for i in range(3)]
     
+
+    for subdf in pos_bloque:
+        subdf.columns=["N","Central","Cmg"]
+    
+    for gen_fecha in CCOs.keys():
+        if fecha[:-2] in str(gen_fecha):
+            path=CCOs[gen_fecha]
+            df_generacion=pd.read_excel(path,sheet_name="GenN",header=7)
+            if int(hora) in list(range(9)):
+                df_generacion=df_generacion[["UNIDADES","CV en Quillota", "Gen Neta [MWh]",int(hora)]]
+                df_generacion.columns=["Central","CV en Quillota", "Gen Neta [MWh]"]+[x for x in df_generacion.columns[3:]]
+                break
+            elif int(hora) in list(range(9,19)):
+                df_generacion=df_generacion[["UNIDADES.1","CV en Quillota.1", "Gen Neta [MWh].1",int(hora)]]
+                df_generacion.columns=["Central","CV en Quillota", "Gen Neta [MWh]"]+[x for x in df_generacion.columns[3:]]
+                break
+            elif int(hora) in list(range(19,25)):
+                df_generacion=df_generacion[["UNIDADES.2","CV en Quillota.2", "Gen Neta [MWh].2",int(hora)]]
+                df_generacion.columns=["Central","CV en Quillota", "Gen Neta [MWh]"]+[x for x in df_generacion.columns[3:]]
+                break
+
+    #Paso 1: En función de la fecha/hora seleccionamos el bloque
+    po_bloque=None
+
+    #Seleccionamos bloque según hora
+    if int(hora) in list(range(9)):
+        po_bloque=pos_bloque[0]
+    elif int(hora) in list(range(9,19)):
+        po_bloque=pos_bloque[1]
+    elif int(hora) in list(range(19,25)):
+        po_bloque=pos_bloque[2]
+        
+    #Agregamos Central Costo Cero
+    po_bloque.loc[-1]=[0,"COSTO_CERO",0]
+    po_bloque.index = po_bloque.index + 1  # shifting index
+    po_bloque = po_bloque.sort_index(ascending=True)  # sorting by index
+
+    #Asociamos la generación a la PO.
+    #Asociamos la generación desde df_generacion a po_bloque.
+    po_bloque = pd.merge(po_bloque, df_generacion, on='Central',how="left")
+    po_bloque = pd.merge(po_bloque,df_mintecnicos,on="Central",how="left")
+    
+    #Agregamos generación infinita a la central Costo Cero.
+    po_bloque.loc[po_bloque.Central == "COSTO_CERO", po_bloque.columns[5]] = 999
+    
+    #Obtenemos minimos técnicos
+    ###Funcion que asigna minimos técnicos.
+    #Cols K, M and R
+    po_bloque["Potencia bruta máxima"] = po_bloque["Potencia bruta máxima"].fillna(0)
+    po_bloque["Potencia neta máxima"] = po_bloque["Potencia neta máxima"].fillna(0)
+    po_bloque["Potencia neta máxima"] = pd.to_numeric(po_bloque["Potencia neta máxima"], errors='coerce').fillna(0)
+    po_bloque["Potencia bruta mínima (A.T.)"] = po_bloque["Potencia bruta mínima (A.T.)"].fillna(0)
+    
+    #Min Tecnico = M/K*R
+    po_bloque["Min_Tecnico"] = po_bloque["Potencia bruta máxima"]/po_bloque["Potencia neta máxima"]*po_bloque["Potencia bruta mínima (A.T.)"]
+    po_bloque["Min_Tecnico"] = po_bloque["Min_Tecnico"].fillna(0)
+    
+    #Asignamos generación restante igual a generación inicial.
+    po_bloque["Gen_Restante"] = po_bloque[po_bloque.columns[5]]-po_bloque["Min_Tecnico"]
+    
+    #Asignamos Cmg a centrales marginales 
+    for central in cx.keys():
+        periodo_marginacion=cx[central]
+        try:
+            value=po_bloque.loc[po_bloque["Central"]==central]["Cmg"].values[0]
+            cx.update({central:(periodo_marginacion,value)})
+        except:
+            #print(central)
+            cx.update({central:(periodo_marginacion,0)})
+    
+    #Reordenamos centrales marginales según Cmg. Caras primero.
+    #print(cx)
+    cx=marginal_sorted(cx)
+    #print(cx)
+    
+    
+
+    #Algoritmo para ordenar las centrales según costo marginal.
     for central in cx.keys():
         #Periodo de marginación, hora del bloque
-        periodo_marginacion=cx[central]
+        periodo_marginacion=cx[central][0]
         periodo_marginacion_acumulado+=periodo_marginacion
-        hora=fecha[-2:]
         
         #Consideramos también la existencia de los mínimos técnicos.
         gen_req=gen_cx_estudio*periodo_marginacion/60
         gen_max=gen_req
         gen_mintecnico=mintec_cx_estudio*periodo_marginacion/60
         
-        #Caso base: Costo cero -> Hay que seguir removiendo generación a las centrales:
-        #Por lo tanto, se debe incorporar como primer elemento dentro del a PO.
-        # if central=="COSTO_CERO":
-        #     #output.update({fecha:[0,0]})
-        #     if "COSTO_CERO" in new_cmgs.keys():
-        #         data=new_cmgs["COSTO_CERO"]
-        #         new_cmgs.update({"COSTO_CERO":[0,periodo_marginacion+data[1]]})
-        #     else:
-                # new_cmgs.update({"COSTO_CERO":[0,periodo_marginacion]})
-        #     old_cmgs.update({"COSTO_CERO":[0,periodo_marginacion]})
-        #     #Qué hacer cuando hay costo cero? -> Mín técnico, full despacho?
-        #     if costo_cero_alg==1:
-        #         # #print("\nBloque Costo Cero")
-        #         # print(gen_output)
-        #         aux_updatedict_gen(gen_output,fecha,gen_cx_estudio*periodo_marginacion/60)
-        #         # print(gen_output)s
-        #     elif costo_cero_alg==2:
-        #         aux_updatedict_gen(gen_output,fecha,gen_mintecnico)
-        #     continue
-        
-        
-        PO_asociada=[POs_paths[x] for x in POs_paths.keys() if fecha[2:-2] in x][0]
-        df=pd.read_excel(PO_asociada,sheet_name="TCO",header=6)
-        pos_bloque=[df[df.columns[1+i*4:4+i*4]] for i in range(3)]
-
-        for subdf in pos_bloque:
-            subdf.columns=["N","Central","Cmg"]
-        
-        #del df
-        
-        for gen_fecha in CCOs.keys():
-            if fecha[:-2] in str(gen_fecha):
-                path=CCOs[gen_fecha]
-                df_generacion=pd.read_excel(path,sheet_name="GenN",header=7)
-                if int(hora) in list(range(9)):
-                    df_generacion=df_generacion[["UNIDADES","CV en Quillota", "Gen Neta [MWh]",int(hora)]]
-                    df_generacion.columns=["Central","CV en Quillota", "Gen Neta [MWh]"]+[x for x in df_generacion.columns[3:]]
-                    
-                    ##print("Using PO1")
-                elif int(hora) in list(range(9,19)):
-                    df_generacion=df_generacion[["UNIDADES.1","CV en Quillota.1", "Gen Neta [MWh].1",int(hora)]]
-                    df_generacion.columns=["Central","CV en Quillota", "Gen Neta [MWh]"]+[x for x in df_generacion.columns[3:]]
-                    ##print("Using PO2")
-                elif int(hora) in list(range(19,25)):
-                    df_generacion=df_generacion[["UNIDADES.2","CV en Quillota.2", "Gen Neta [MWh].2",int(hora)]]
-                    df_generacion.columns=["Central","CV en Quillota", "Gen Neta [MWh]"]+[x for x in df_generacion.columns[3:]]
-
-
-        
-        #Inicio del algoritmo:
-        #Paso 1: En función de la fecha/hora seleccionamos el bloque
-        po_bloque=None
-        #print("\n")
-        #Seleccionamos bloque según hora
-        if int(hora) in list(range(9)):
-            po_bloque=pos_bloque[0]
-            #print("Using PO1")
-        elif int(hora) in list(range(9,19)):
-            po_bloque=pos_bloque[1]
-            #print("Using PO2")
-        elif int(hora) in list(range(19,25)):
-            po_bloque=pos_bloque[2]
-            #print("Using PO3")
-            
-        #Agregamos Central Costo Cero
-        po_bloque.loc[-1]=[0,"COSTO_CERO",0]
-        po_bloque.index = po_bloque.index + 1  # shifting index
-        po_bloque = po_bloque.sort_index(ascending=True)  # sorting by index
-
-        # raise
         #Paso 2: Encontrar central marginal según registro anterior. -> variable "central"
         #Indice de la central
         pos_centralmarginal=po_bloque.loc[po_bloque["Central"]==central].index[0]
         
-        
         #Ordenamos el registro de centrales
-        po_bloque=po_bloque.iloc[0:pos_centralmarginal+1].sort_index(ascending=False)
-        # raise
-        
-        
-        
-        #Asociamos la generación a la PO.
-        #Asociamos la generación desde df_generacion a po_bloque.
-        po_bloque = pd.merge(po_bloque, df_generacion, on='Central',how="left")
-        po_bloque = pd.merge(po_bloque,df_mintecnicos,on="Central",how="left")
-        
-        #Agregamos generación infinita a la central Costo Cero.
-        po_bloque.loc[po_bloque.Central == "COSTO_CERO", po_bloque.columns[5]] = 999
-        #raise
-        
-
-        
-        #Cols K, M and R
-        po_bloque["Potencia bruta máxima"] = po_bloque["Potencia bruta máxima"].fillna(0)
-        po_bloque["Potencia neta máxima"] = po_bloque["Potencia neta máxima"].fillna(0)
-        po_bloque["Potencia bruta mínima (A.T.)"] = po_bloque["Potencia bruta mínima (A.T.)"].fillna(0)
-        
-        
-        #Min Tecnico = M/K*R
-        po_bloque["Min_Tecnico"] = po_bloque["Potencia bruta máxima"]/po_bloque["Potencia neta máxima"]*po_bloque["Potencia bruta mínima (A.T.)"]
-        po_bloque["Min_Tecnico"] = po_bloque["Min_Tecnico"].fillna(0)
-        po_bloque["Gen_Restante"] =None
-        #Si el cmg es distinto, el programa avisa.
-        
+        intra_horario=po_bloque.iloc[0:pos_centralmarginal+1].sort_index(ascending=False)
        
-        new_pos_centralmarginal=po_bloque.loc[po_bloque["Central"]==central].index[0]
-        marginal_real=po_bloque.loc[po_bloque["Central"]==central]['Cmg'][new_pos_centralmarginal]
+        new_pos_centralmarginal=intra_horario.loc[intra_horario["Central"]==central].index[0]
+        marginal_real=intra_horario.loc[intra_horario["Central"]==central]['Cmg'][new_pos_centralmarginal]
+        
         ##Revisar 
         costo_marginal+=marginal_real*periodo_marginacion/60
-        old_cmgs.update({po_bloque.iloc[new_pos_centralmarginal]["Central"]:[marginal_real,periodo_marginacion]})
-        
-        #Obtenemos minimos técnicos
-        ###Funcion que asigna minimos técnicos.
+        old_cmgs.update({intra_horario.iloc[new_pos_centralmarginal]["Central"]:[marginal_real,periodo_marginacion]})
     
         #Iniciamos algoritmo para descubrir que central es la nueva marginal.
-        na_map=po_bloque.isna() 
+        na_map=intra_horario.isna() 
         
         gen_required=True
-        ##print(fecha,hora)
         #print(fecha,hora,periodo_marginacion,gen_req,gen_mintecnico)
-        
+        #raise
         if alg_type==1:
             while gen_req>0:
-                for index,row in po_bloque.iterrows():
+                for index,row in intra_horario.iterrows():
                     
                     #Si no hay generación asociada, avanzamos.
                     if na_map.iloc[index,5]==True:
                         continue
-                    #print(row["Central"],
-                          #row["Cmg"],
-                         # gen_req,
-                          #row[po_bloque.columns[5]],
-                          #row[po_bloque.columns[5]]*periodo_marginacion/60)
                     
                     #Obtenemos la generación y se pondera por el periodo de marginación.
-                    gen=(row[po_bloque.columns[5]]-row["Min_Tecnico"])*periodo_marginacion/60
+                    gen=(row[intra_horario.columns[5]]-row["Min_Tecnico"])*periodo_marginacion/60
                     
                     #Si la generación requerida es mayor que la disponible en la central.
                     if gen_req>gen:
@@ -304,13 +298,13 @@ for fecha in dicc_marginal.keys():
                         aux_updatedict(new_cmgs,row["Central"],[row["Cmg"],periodo_marginacion],1)
                         gen_req=0
                         #Update the new generation
-                        po_bloque.iloc[index,10]=gen-gen_req
+                        intra_horario.iloc[index,10]=gen-gen_req
                         break
 
 
         if alg_type==2:
             while gen_required==True:
-                for index,row in po_bloque.iterrows():
+                for index,row in intra_horario.iterrows():
                     
                     #Si no está vacío el CV en Quillota, lo tomo. En otro caso,
                     #Tomamos el de la PO.
@@ -318,25 +312,12 @@ for fecha in dicc_marginal.keys():
                         cmg_actual=row['CV en Quillota']
                     else:
                         cmg_actual=row["Cmg"]
-                    #Si no hay generación asociada, avanzamos.
-                    #Comparamos el costo marginal del bloque con el de la central de estudio.
-                    #Si el costo marginal de la central de estudio es mayor, no revisamos generación (???)
-                    # if cmg_central_estudio>cmg_actual:
-                    #     #print("Caso 0")
-                    #     aux_updatedict(new_cmgs,row["Central"],[row["Cmg"],periodo_marginacion],1)
-                    #     gen_req=gen_max-gen_mintecnico
-                    #     gen_required=False
-                    #     break
-                    
+
                     if na_map.iloc[index,5]==True:
                         continue
                     
-                   
-                    
-                    
-                    
-                    #Obtenemos la generación y se pondera por el periodo de marginación.
-                    gen=(row[po_bloque.columns[5]]-row["Min_Tecnico"])*periodo_marginacion/60
+                    #Obtenemos la generación (restante) y se pondera por el periodo de marginación.
+                    gen=row[intra_horario.columns[5]]*periodo_marginacion/60
                     
                     #print("Central, Cmg, Gen_req, Gen_Central_Actual,Gen_Central_Actual_Prorrateada,Gen_Central_Actual_Prorrateada_ConMT")
                     #print(row["Central"],
@@ -355,7 +336,8 @@ for fecha in dicc_marginal.keys():
                     #Removemos toda la generación y vamos a la próxima central.
                     if cmg_actual>=cmg_central_estudio and gen_req>=gen:
                         #print("Caso1")
-                        po_bloque.iloc[index,10]=0
+                        resta_genpo(po_bloque, row["Central"], gen)
+                        #intra_horario.iloc[index,10]=0
                         gen_req=gen_req-gen
                         
                     #Caso 2
@@ -380,7 +362,8 @@ for fecha in dicc_marginal.keys():
                                 #Remuevo la diferencia de la central anterior
                                 #Gen restante = gen-delta+gen anterior?
                                 #po_bloque = (gen-mintec)*periodomarginal-gen_req
-                                po_bloque.iloc[index,10]=(gen-delta)
+                                resta_genpo(po_bloque, row["Central"], delta)
+                                #intra_horario.iloc[index,10]=(gen-delta)
                                 #Detengo el algoritmo.
                                 gen_required=False
                                 #La central a la que se le quitó generación margina.
@@ -389,7 +372,8 @@ for fecha in dicc_marginal.keys():
                             #Si la energía es menor que la que requiero
                             else:
                                 #Quito toda la energía
-                                po_bloque.iloc[index,10]=0
+                                resta_genpo(po_bloque, row["Central"], gen)
+                                #intra_horario.iloc[index,10]=0
                                 #Y la restamos al a generación requerida.
                                 gen_req=gen_req-gen
                                 #El algoritmo sigue con la próxima central.
@@ -400,7 +384,6 @@ for fecha in dicc_marginal.keys():
                             #el algoritmo se detiene.
                             #Falta exportar la generación final de la central
                             aux_updatedict(new_cmgs,row["Central"],[row["Cmg"],periodo_marginacion],1)
-                                
                             gen_required=False
                             break
                     
@@ -412,7 +395,8 @@ for fecha in dicc_marginal.keys():
                         #print("Caso3")
                         aux_updatedict(new_cmgs,row["Central"],[row["Cmg"],periodo_marginacion],1)
                         gen_req=0
-                        po_bloque.iloc[index,10]=gen-gen_req
+                        resta_genpo(po_bloque, row["Central"], gen_req)
+                        #intra_horario.iloc[index,10]=gen-gen_req
                         gen_required=False
                         break
                     
@@ -439,7 +423,8 @@ for fecha in dicc_marginal.keys():
                                 #Remuevo la diferencia de la central anterior
                                 #Gen restante = gen-delta+gen anterior?
                                 #po_bloque = (gen-mintec)*periodomarginal-gen_req
-                                po_bloque.iloc[index,10]=(gen-delta)
+                                resta_genpo(po_bloque, row["Central"], delta)
+                                #intra_horario.iloc[index,10]=(gen-delta)
                                 #Detengo el algoritmo.
                                 gen_required=False
                                 #La central a la que se le quitó generación margina.
@@ -449,7 +434,7 @@ for fecha in dicc_marginal.keys():
                             else:
                                 #print("Si la energia es menor")
                                 #Quito toda la energía
-                                po_bloque.iloc[index,10]=0
+                                intra_horario.iloc[index,10]=0
                                 #Y la restamos al a generación requerida.
                                 gen_req=gen_req-gen
                                 #El algoritmo sigue con la próxima central.
