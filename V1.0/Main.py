@@ -428,7 +428,7 @@ for fecha in dicc_marginal.keys():
                           row[po_bloque.columns[5]]*periodo_marginacion/60,
                           gen)
                     
-                    # if row["Central"]=="MEJILLONES-CTM3_TG1+TV1_GNL_E":
+                    #   if row["Central"]=="MEJILLONES-CTM3_TG1+TV1_GNL_E":
                         # raise
                     
                     #Caso 1
@@ -501,7 +501,6 @@ for fecha in dicc_marginal.keys():
                     #Caso 4
                     #Si la generación requerida es menor que la que tiene la central
                     #Y el Costo marginal es menor que el de la central de estudio
-                    #No removemos y detenemos el algoritmo.
                     elif gen_req<gen and cmg_actual<cmg_central_estudio:
                         print("Caso4")
                         #Si la central aún no genera a mínimo técnico, entonces
@@ -540,9 +539,8 @@ for fecha in dicc_marginal.keys():
                         else:
                             #Si ya he generado más del mínimo técnico, entonces
                             #el algoritmo se detiene.
-                            #Falta exportar la generación final de la central
-                            aux_updatedict(new_cmgs,row["Central"],[row["Cmg"],periodo_marginacion],1)
-    
+                            #Central de estudio margina.
+                            aux_updatedict(new_cmgs,"Central Estudio",[cmg_central_estudio,periodo_marginacion],1)
                             gen_required=False
                             break
             val=(gen_max-gen_req)
@@ -785,7 +783,7 @@ for fecha,df_fecha in df_generacion.groupby('Fecha'):
         for hora in horas_simulacion:
             embarque=embarques.loc[embarques['Fecha']==fecha]['Hora '+str(hora+1)].iloc[0]
             central_estudio=dicc_centrales_estudio[embarque]
-            print(fecha,hora+1,embarque)
+            #print(fecha,hora+1,embarque)
             
             if hora in list(range(8)):
                 politica=df_po[['Prioridad_1','CENTRALES_1','CMg_1']]
@@ -861,16 +859,16 @@ for fecha,df_fecha in df_generacion.groupby('Fecha'):
             Gen_central_estudio=generacion_declarada.loc[generacion_declarada['Fecha']==fecha]['Hora '+str(hora+1)].values[0]
             if CMg_bloque<CV_central_estudio:
                 Gen_central_estudio=Min_Tecnico_Central_Estudio
-            # print(Gen_central_estudio,CV_central_estudio,CMg_bloque)
+            # #print(Gen_central_estudio,CV_central_estudio,CMg_bloque)
             Gas_Movilizado_A_Central_Estudio_Bloque=0
            
             
             #Agregamos inmediatamente el gas sobrante de la declaracion que sera la diferencia que sobro (que puede ser 0 o más, o el valor máximo de generacion si es que hay gas disponible ):
             # Gas_Movilizado_A_Central_Estudio_Bloque=min(Dif_Gas_Diario,Gen_central_estudio*heat_rate_central_estudio/1000)
-            # print(min(Dif_Gas_Diario,Gen_central_estudio*heat_rate_central_estudio/1000))
+            # #print(min(Dif_Gas_Diario,Gen_central_estudio*heat_rate_central_estudio/1000))
             #Lo restamos de la generacion necesaria en el bloque:
             # Gen_central_estudio-=Gas_Movilizado_A_Central_Estudio_Bloque/heat_rate_central_estudio*1000
-            # print(Gen_central_estudio)
+            # #print(Gen_central_estudio)
             #Revisamos la condicion de N1 y su generacion.
             #GAS generado por todas las centrales = Gas_Centrales_Termicas_Hora
             #GAS generado por las centrales sin N1= Gas_Centrales_Termicas_Hora_SinN1
@@ -880,8 +878,8 @@ for fecha,df_fecha in df_generacion.groupby('Fecha'):
             #Si no, reviso N1.
             if Gas_Centrales_Termicas_Hora_SinN1<Gen_central_estudio*heat_rate_central_estudio/1000:
                 #reviso N1:
-                    # print(Gas_Centrales_Termicas_Hora,Gas_Centrales_Termicas_Hora_SinN1,Gen_central_estudio*heat_rate_central_estudio/1000)
-                    # print('hey')
+                    # #print(Gas_Centrales_Termicas_Hora,Gas_Centrales_Termicas_Hora_SinN1,Gen_central_estudio*heat_rate_central_estudio/1000)
+                    # #print('hey')
                     N1=central_estudio.replace("2","1")
                     hr_n1=hr_central(N1)
                     Gas_MIN_TECNICO_N1=mintecnico_central(N1)*hr_n1/1000
@@ -889,11 +887,11 @@ for fecha,df_fecha in df_generacion.groupby('Fecha'):
                     indice_N1=termicas_estudiables.loc[termicas_estudiables['Centrales_Termicas']==N1].index[0]
                     #Si N1 cubre N2 y no rompe min tecnico. Avanzo normalmente
                     if Gas_N1-Gen_central_estudio*heat_rate_central_estudio/1000>=Gas_MIN_TECNICO_N1 and Gas_N1>=Gen_central_estudio*heat_rate_central_estudio/1000:
-                        # print('a',(Gas_N1-Gen_central_estudio*heat_rate_central_estudio/1000)/heat_rate_central_estudio*1000,Gas_N1,Gen_central_estudio*heat_rate_central_estudio/1000)
+                        # #print('a',(Gas_N1-Gen_central_estudio*heat_rate_central_estudio/1000)/heat_rate_central_estudio*1000,Gas_N1,Gen_central_estudio*heat_rate_central_estudio/1000)
                         pass
                     #Si N1 cubre N2 y rompe min tecnico, entonces saco N1 completamente y avanzo.
                     elif Gas_N1-Gen_central_estudio*heat_rate_central_estudio/1000<Gas_MIN_TECNICO_N1 and Gas_N1>=Gen_central_estudio*heat_rate_central_estudio/1000:
-                        # print('b')
+                        # #print('b')
                         #Generacion_necesaria=0
                         # Gen_central_estudio=Gen_central_estudio
                         Gas_Movilizado_A_Central_Estudio_Bloque+=Gen_central_estudio*heat_rate_central_estudio/1000
@@ -903,7 +901,7 @@ for fecha,df_fecha in df_generacion.groupby('Fecha'):
                         # raise
                     #Si N1 no cubre N2 y rompe min tecnico, saco N1 completa y avanzo.
                     elif Gas_N1-Gen_central_estudio*heat_rate_central_estudio/1000<Gas_MIN_TECNICO_N1 and Gas_N1<=Gen_central_estudio*heat_rate_central_estudio/1000:
-                        # print('c')
+                        # #print('c')
                         # Gen_central_estudio-=Dif_Gas_N1/heat_rate_central_estudio*1000
                         Gas_Movilizado_A_Central_Estudio_Bloque+=Gas_N1
                         termicas_estudiables['Gas_Hora'][indice_N1]=0
@@ -918,7 +916,7 @@ for fecha,df_fecha in df_generacion.groupby('Fecha'):
             Gen_central_estudio=Gen_central_estudio-Gas_Movilizado_A_Central_Estudio_Bloque/heat_rate_central_estudio*1000
             
             CMg_Final_Bloque=0
-            # print('Generacion Objetivo:',Gen_central_estudio)
+            # #print('Generacion Objetivo:',Gen_central_estudio)
             for central,tiempo in Marginales.items():
                 
                 Gen_central_estudio_subbloque=Gen_central_estudio*tiempo/60
