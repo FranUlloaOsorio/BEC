@@ -19,6 +19,8 @@ import linecache
 import warnings
 import time
 
+init_time=time.time()
+
 warnings.filterwarnings('ignore')
 
 def check_files(path):
@@ -127,9 +129,9 @@ except:
     #Cuánta generación tendrá la central de estudio
     gen_cx_estudio=150
     #Cuál es el costo marginal de la central de estudio
-    cmg_central_estudio=300
+    cmg_central_estudio=0
     #Cuál es el mínimo técnico de la central de estudio
-    mintec_cx_estudio=75
+    mintec_cx_estudio=0
 
 print(sys.argv)
 print(cmg_central_estudio,mintec_cx_estudio)
@@ -145,15 +147,15 @@ alg_type=2
 #2-> Envía la central a mínimo técnico.
 costo_cero_alg=2
 
-#%%
+#%
 
 output={}
 gen_output={}
 for fecha in dicc_marginal.keys():
     # if not fecha in (["20230701"+"%02d" % (x,) for x in range(1,25)]):
     # +["20230702"+"%02d" % (x,) for x in range(1,25)]):
-    if not fecha =="2023070101":
-        continue
+    # if not fecha =="2023070101":
+        # continue
     #Para cada fecha
     cx=dicc_marginal[fecha].copy()
     #Para cada central marginal distinta dentro del bloque intra-horario
@@ -246,6 +248,8 @@ for fecha in dicc_marginal.keys():
 
     #Algoritmo para ordenar las centrales según costo marginal.
     for central in cx.keys():
+        print("\n\n")
+        print(fecha)
         #Periodo de marginación, hora del bloque
         periodo_marginacion=cx[central][0]
         periodo_marginacion_acumulado+=periodo_marginacion
@@ -260,8 +264,8 @@ for fecha in dicc_marginal.keys():
         pos_centralmarginal=po_bloque.loc[po_bloque["Central"]==central].index[0]
         
         #Ordenamos el registro de centrales
-        intra_horario=po_bloque.iloc[0:pos_centralmarginal+1].sort_index(ascending=False)
-       
+        intra_horario=po_bloque.iloc[0:pos_centralmarginal+1].sort_index(ascending=False).copy()
+        
         new_pos_centralmarginal=intra_horario.loc[intra_horario["Central"]==central].index[0]
         marginal_real=intra_horario.loc[intra_horario["Central"]==central]['Cmg'][new_pos_centralmarginal]
         
@@ -280,7 +284,7 @@ for fecha in dicc_marginal.keys():
                 for index,row in intra_horario.iterrows():
                     
                     #Si no hay generación asociada, avanzamos.
-                    if na_map.iloc[index,5]==True:
+                    if na_map.iloc[index,11]==True:
                         continue
                     
                     #Obtenemos la generación y se pondera por el periodo de marginación.
@@ -305,6 +309,7 @@ for fecha in dicc_marginal.keys():
         if alg_type==2:
             while gen_required==True:
                 for index,row in intra_horario.iterrows():
+                    #print(row["Central"],index,na_map.iloc[index,10])
                     
                     #Si no está vacío el CV en Quillota, lo tomo. En otro caso,
                     #Tomamos el de la PO.
@@ -313,22 +318,23 @@ for fecha in dicc_marginal.keys():
                     else:
                         cmg_actual=row["Cmg"]
 
-                    if na_map.iloc[index,5]==True:
+                    if na_map["Gen_Restante"][index]==True:
                         continue
                     
+                    
                     #Obtenemos la generación (restante) y se pondera por el periodo de marginación.
-                    gen=row[intra_horario.columns[5]]*periodo_marginacion/60
+                    gen=row["Gen_Restante"]*periodo_marginacion/60
                     
                     #print("Central, Cmg, Gen_req, Gen_Central_Actual,Gen_Central_Actual_Prorrateada,Gen_Central_Actual_Prorrateada_ConMT")
-                    #print(row["Central"],
-                          #row["Cmg"],
-                          #gen_req,
+                    print(row["Central"],
+                          row["Cmg"],
+                          gen_req,
                           #row[po_bloque.columns[5]],
                           #row[po_bloque.columns[5]]*periodo_marginacion/60,
-                          #gen)
+                          gen)
                     
-                    #   if row["Central"]=="MEJILLONES-CTM3_TG1+TV1_GNL_E":
-                        # raise
+                    #if row["Central"]=="NEHUENCO-2_TG1+TV1_GNL_A":
+                        #raise
                     
                     #Caso 1
                     #Si la generación requerida es más que la que tiene la central
@@ -528,9 +534,10 @@ fig.update_layout(
 
 
 fig.show()
-fig.write_html("Nuevos_CMgs.html")
-df.to_excel("Nuevos_CMgs.xlsx",header=True,index=False)
-
+#fig.write_html("Nuevos_CMgs.html")
+#df.to_excel("Nuevos_CMgs.xlsx",header=True,index=False)
+df.to_excel("Nuevos_CMgs"+str(cmg_central_estudio)+"_"+str(mintec_cx_estudio)+".xlsx",header=True,index=False)
+fig.write_html("Nuevos_CMgs"+str(cmg_central_estudio)+"_"+str(mintec_cx_estudio)+".html")
 
 
 df=pd.DataFrame(columns=["Día","Hora","Gen",])
@@ -565,4 +572,6 @@ fig.update_layout(
 fig.show()
 fig.write_html("Generacion"+str(cmg_central_estudio)+"_"+str(mintec_cx_estudio)+".html")
 df.to_excel("Generacion"+str(cmg_central_estudio)+"_"+str(mintec_cx_estudio)+".xlsx",header=True,index=False)
+
+print(round(time.time()-init_time,2))
 sys.exit(0)
