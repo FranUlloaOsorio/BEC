@@ -19,6 +19,8 @@ import linecache
 import warnings
 import time
 
+
+debug = True
 init_time=time.time()
 
 warnings.filterwarnings('ignore')
@@ -118,6 +120,8 @@ CCOs=check_files(path)
 df_mintecnicos=pd.read_excel("./Insumos/Minimos_Tecnicos.xlsx",header=[6],usecols = ['Central',"Potencia bruta máxima",'Potencia neta máxima',"Potencia bruta mínima (A.T.)"])
 
 
+#%%
+
 try:
     #Cuánta generación tendrá la central de estudio
     gen_cx_estudio=int(sys.argv[1])
@@ -147,15 +151,15 @@ alg_type=2
 #2-> Envía la central a mínimo técnico.
 costo_cero_alg=2
 
-#%
+
 
 output={}
 gen_output={}
 for fecha in dicc_marginal.keys():
     # if not fecha in (["20230701"+"%02d" % (x,) for x in range(1,25)]):
     # +["20230702"+"%02d" % (x,) for x in range(1,25)]):
-    # if not fecha =="2023070101":
-        # continue
+    if not fecha =="2023070118":
+        continue
     #Para cada fecha
     cx=dicc_marginal[fecha].copy()
     #Para cada central marginal distinta dentro del bloque intra-horario
@@ -248,8 +252,9 @@ for fecha in dicc_marginal.keys():
 
     #Algoritmo para ordenar las centrales según costo marginal.
     for central in cx.keys():
-        print("\n\n")
-        print(fecha)
+        if debug:
+            print("\n\n")
+            print(fecha)
         #Periodo de marginación, hora del bloque
         periodo_marginacion=cx[central][0]
         periodo_marginacion_acumulado+=periodo_marginacion
@@ -275,10 +280,12 @@ for fecha in dicc_marginal.keys():
     
         #Iniciamos algoritmo para descubrir que central es la nueva marginal.
         na_map=intra_horario.isna() 
-        
         gen_required=True
         #print(fecha,hora,periodo_marginacion,gen_req,gen_mintecnico)
-        #raise
+        # raise
+        # if central=="ELTORO_vlaja1":
+            # raise
+        
         if alg_type==1:
             while gen_req>0:
                 for index,row in intra_horario.iterrows():
@@ -311,6 +318,7 @@ for fecha in dicc_marginal.keys():
                 for index,row in intra_horario.iterrows():
                     #print(row["Central"],index,na_map.iloc[index,10])
                     
+                    
                     #Si no está vacío el CV en Quillota, lo tomo. En otro caso,
                     #Tomamos el de la PO.
                     if not na_map.iloc[index,3]:
@@ -323,35 +331,42 @@ for fecha in dicc_marginal.keys():
                     
                     
                     #Obtenemos la generación (restante) y se pondera por el periodo de marginación.
-                    gen=row["Gen_Restante"]*periodo_marginacion/60
+                    # gen=row["Gen_Restante"]*periodo_marginacion/60
+                    gen=po_bloque.iloc[index,10]*periodo_marginacion/periodo_marginacion_acumulado
                     
-                    #print("Central, Cmg, Gen_req, Gen_Central_Actual,Gen_Central_Actual_Prorrateada,Gen_Central_Actual_Prorrateada_ConMT")
-                    print(row["Central"],
-                          row["Cmg"],
-                          gen_req,
-                          #row[po_bloque.columns[5]],
-                          #row[po_bloque.columns[5]]*periodo_marginacion/60,
-                          gen)
+                    print("Central, Cmg, Gen_req, Min Tecnico, Gen_Central_Actual_Prorrateada_ConMT, Unidad")
+                    if debug:
+                        print(row["Central"],
+                              row["Cmg"],
+                              gen_req,
+                              row["Min_Tecnico"],
+                              #row[po_bloque.columns[5]],
+                              #row[po_bloque.columns[5]]*periodo_marginacion/60,
+                              gen,
+                              row["Gen Neta [MWh]"])
                     
-                    #if row["Central"]=="NEHUENCO-2_TG1+TV1_GNL_A":
-                        #raise
+                    # if row["Central"]=="CANDELARIA-1_GNL_C":
+                        # raise
                     
                     #Caso 1
                     #Si la generación requerida es más que la que tiene la central
                     #Y el Costo marginal es mayor que el de la central de estudio
                     #Removemos toda la generación y vamos a la próxima central.
                     if cmg_actual>=cmg_central_estudio and gen_req>=gen:
-                        #print("Caso1")
+                        if debug:
+                            print("Caso1")
                         resta_genpo(po_bloque, row["Central"], gen)
                         #intra_horario.iloc[index,10]=0
                         gen_req=gen_req-gen
+                        
                         
                     #Caso 2
                     #Si la generación requerida es más que la que tiene la central
                     #Y el Costo marginal es menor que el de la central de estudio
                     #No removemos y detenemos el algoritmo.
                     elif cmg_actual<cmg_central_estudio and gen_req>=gen:
-                        #print("Caso2")
+                        if debug:
+                            print("Caso2")
                         #Si la central aún no genera a mínimo técnico, entonces
                         #removemos la energía necesaria y evaluamos.
                         #Si lo que generé es menor que el mínimo técnico
@@ -398,7 +413,8 @@ for fecha in dicc_marginal.keys():
                     #Y el costo marginal es mayor que el de la central de estudio
                     #Removemos lo necesario y detenemos el algoritmo.
                     elif gen_req<gen and cmg_actual>=cmg_central_estudio:
-                        #print("Caso3")
+                        if debug:
+                            print("Caso3")
                         aux_updatedict(new_cmgs,row["Central"],[row["Cmg"],periodo_marginacion],1)
                         gen_req=0
                         resta_genpo(po_bloque, row["Central"], gen_req)
@@ -410,7 +426,8 @@ for fecha in dicc_marginal.keys():
                     #Si la generación requerida es menor que la que tiene la central
                     #Y el Costo marginal es menor que el de la central de estudio
                     elif gen_req<gen and cmg_actual<cmg_central_estudio:
-                        #print("Caso4")
+                        if debug:
+                            print("Caso4")
                         #Si la central aún no genera a mínimo técnico, entonces
                         #removemos la energía necesaria y evaluamos.
                         #Si lo que generé es menor que el mínimo técnico
@@ -464,6 +481,7 @@ for fecha in dicc_marginal.keys():
                 
     #Actualizamos diccionario de salida con el nuevo CMG y el antiguo                
     output.update({fecha:[sum([new_cmgs[key][0]*new_cmgs[key][1]/60 for key in new_cmgs.keys()]),costo_marginal]})
+    
     #raise
 
 #% Visualization block
