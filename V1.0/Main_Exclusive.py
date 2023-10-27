@@ -117,11 +117,25 @@ POs=[POs_paths[file] for file in POs_paths.keys() if "PO" in file]
 path="./DB/DB_SSCC/Respaldos_CO_SC_CCA/02 Costos de Oportunidad/Detalle diario"
 CCOs=check_files(path)
 
+
+##Perfil de generación
+df_gen_entrada=pd.read_excel("./Insumos/Entrada_Modelo.xlsx",header=[0])
+df_gen_entrada.columns=["Fecha","Hora","Pmax","Pmin","CV"]
+df_gen_entrada["Date"]=None
+
+##Dateformat entry for the simulator:
+##YYYYMMDDHH
+
+for index,row in df_gen_entrada.iterrows():
+    actual = row["Fecha"]
+    hora = row["Hora"]
+    df_gen_entrada.iloc[index,5] = actual.strftime("%Y%m%d")+"{0:0=2d}".format(hora)
+        
+    #df_gen.iloc[index,5] = actual+datetime.timedelta(hours=hora-1)
+
+
 df_mintecnicos=pd.read_excel("./Insumos/Minimos_Tecnicos.xlsx",header=[6],usecols = ['Central',"Potencia bruta máxima",'Potencia neta máxima',"Potencia bruta mínima (A.T.)"])
-
-
-#%%
-
+#init_time=time.time()
 try:
     #Cuánta generación tendrá la central de estudio
     gen_cx_estudio=int(sys.argv[1])
@@ -133,9 +147,9 @@ except:
     #Cuánta generación tendrá la central de estudio
     gen_cx_estudio=150
     #Cuál es el costo marginal de la central de estudio
-    cmg_central_estudio=0
+    cmg_central_estudio=300
     #Cuál es el mínimo técnico de la central de estudio
-    mintec_cx_estudio=0
+    mintec_cx_estudio=75    
 
 print(sys.argv)
 print(cmg_central_estudio,mintec_cx_estudio)
@@ -152,14 +166,13 @@ alg_type=2
 costo_cero_alg=2
 
 
-
 output={}
 gen_output={}
 for fecha in dicc_marginal.keys():
     # if not fecha in (["20230701"+"%02d" % (x,) for x in range(1,25)]):
     # +["20230702"+"%02d" % (x,) for x in range(1,25)]):
-    if not fecha =="2023070118":
-        continue
+    # if not fecha =="2023070118":
+        # continue
     #Para cada fecha
     cx=dicc_marginal[fecha].copy()
     #Para cada central marginal distinta dentro del bloque intra-horario
@@ -167,6 +180,15 @@ for fecha in dicc_marginal.keys():
     costo_marginal=0
     old_cmgs={}
     periodo_marginacion_acumulado=0
+    
+    #Entrada horaria:
+    valores_horarios = df_gen_entrada.loc[df_gen_entrada["Date"] == fecha]
+    ##cmg_central_estudio tiene que ser definido acá.
+    cmg_central_estudio = valores_horarios["CV"].values[0]
+    ##mintec_cx_estudio tiene que ser definido acá también.
+    mintec_cx_estudio = valores_horarios["Pmin"].values[0]
+    #gen_cx_estudio tiene que ser definido acá.
+    gen_cx_estudio = valores_horarios["Pmax"].values[0]
     
     hora=fecha[-2:]
     PO_asociada=[POs_paths[x] for x in POs_paths.keys() if fecha[2:-2] in x][0]
@@ -200,10 +222,13 @@ for fecha in dicc_marginal.keys():
     #Seleccionamos bloque según hora
     if int(hora) in list(range(9)):
         po_bloque=pos_bloque[0]
+        print("Usando PO bloque 1")
     elif int(hora) in list(range(9,19)):
         po_bloque=pos_bloque[1]
+        print("Usando PO bloque 2")
     elif int(hora) in list(range(19,25)):
         po_bloque=pos_bloque[2]
+        print("Usando PO bloque 3")
         
     #Agregamos Central Costo Cero
     po_bloque.loc[-1]=[0,"COSTO_CERO",0]
@@ -255,10 +280,11 @@ for fecha in dicc_marginal.keys():
         if debug:
             print("\n\n")
             print(fecha)
+            print(cmg_central_estudio,mintec_cx_estudio,gen_cx_estudio)
         #Periodo de marginación, hora del bloque
         periodo_marginacion=cx[central][0]
         periodo_marginacion_acumulado+=periodo_marginacion
-        
+        print(periodo_marginacion)
         #Consideramos también la existencia de los mínimos técnicos.
         gen_req=gen_cx_estudio*periodo_marginacion/60
         gen_max=gen_req
@@ -284,7 +310,7 @@ for fecha in dicc_marginal.keys():
         #print(fecha,hora,periodo_marginacion,gen_req,gen_mintecnico)
         # raise
         # if central=="ELTORO_vlaja1":
-            # raise
+        # raise
         
         if alg_type==1:
             while gen_req>0:
@@ -327,13 +353,15 @@ for fecha in dicc_marginal.keys():
                         cmg_actual=row["Cmg"]
 
                     if na_map["Gen_Restante"][index]==True:
+                        
                         continue
                     
                     
                     #Obtenemos la generación (restante) y se pondera por el periodo de marginación.
                     # gen=row["Gen_Restante"]*periodo_marginacion/60
-                    gen=po_bloque.iloc[index,10]*periodo_marginacion/periodo_marginacion_acumulado
-                    
+                    gen=(po_bloque.iloc[index,5]-row["Min_Tecnico"])*periodo_marginacion/periodo_marginacion_acumulado
+                    # if periodo_marginacion==16:
+                        # raise
                     print("Central, Cmg, Gen_req, Min Tecnico, Gen_Central_Actual_Prorrateada_ConMT, Unidad")
                     if debug:
                         print(row["Central"],
@@ -484,7 +512,7 @@ for fecha in dicc_marginal.keys():
     
     #raise
 
-#% Visualization block
+#%% Visualization block
 import plotly.io as pio
 pio.renderers.default='browser'
 import plotly.express as px
@@ -544,7 +572,7 @@ for sdf in df_cmgs.groupby("Fecha_Index"):
         color_counter=0
 
 fig.update_layout(
-    title="Nuevo Costo Marginal calculado vs Marginal real en el periodo de estudio para la central "+str(central_estudio),
+    title="Nuevo Costo Marginal calculado vs Marginal real en el periodo de estudio para la central "+str(central_estudio)+" Caso "+str(cmg_central_estudio)+"_"+str(mintec_cx_estudio),
     xaxis_title="Hora del día",
     yaxis_title="Costo Marginal [$US/MWh]",
     legend_title="Periodo de estudio",
@@ -565,19 +593,41 @@ for key in gen_output.keys():
     hora=fecha[-2::]
     df.loc[len(df)+1]=[dia,hora,gen_output[key]]
 
+    
+
 #fig = px.line(df, x="Hora", y="Nuevo CMg", color="Día",markers=True)
+
 fig = go.Figure()
-color_counter=0
+color_counter = 1
+
+
+for sdf in df_gen_entrada.groupby(by="Fecha"):
+    #Quiero obtener el día, para agregarlo como trace.
+    dia=str(sdf[0].year)+"{0:0=2d}".format(sdf[0].month)+"{0:0=2d}".format(sdf[0].day)
+    fig.add_trace(go.Scatter(x=sdf[1]["Hora"], y=sdf[1]["Pmin"],
+                    mode='markers',
+                    marker_color=fig.layout['template']['layout']['colorway'][color_counter],
+                    name='Generación - Archivo Entrada',legendgroup=dia,
+                    legendgrouptitle_text=dia))
+    
+    color_counter+=1
+    if color_counter==10:
+        color_counter=0
+
+color_counter = 0 
+
 for sdf in df.groupby("Día"):
     fig.add_trace(go.Scatter(x=sdf[1]["Hora"], y=sdf[1]["Gen"].apply(lambda x: round(x,3)),
-                    mode='lines+markers',
+                    mode='lines',
                     marker_color=fig.layout['template']['layout']['colorway'][color_counter],
-                    name='Generación por bloque',legendgroup=sdf[0],  # this can be any string, not just "group"
+                    name='Generación Simulada',legendgroup=sdf[0],  # this can be any string, not just "group"
     legendgrouptitle_text=sdf[0]))
     
     color_counter+=1
     if color_counter==10:
         color_counter=0
+
+
 
 fig.update_layout(
     title="Generación para la central "+str(central_estudio),
@@ -591,5 +641,5 @@ fig.show()
 fig.write_html("Generacion"+str(cmg_central_estudio)+"_"+str(mintec_cx_estudio)+".html")
 df.to_excel("Generacion"+str(cmg_central_estudio)+"_"+str(mintec_cx_estudio)+".xlsx",header=True,index=False)
 
-print(round(time.time()-init_time,2))
+print(time.time()-init_time)
 sys.exit(0)
