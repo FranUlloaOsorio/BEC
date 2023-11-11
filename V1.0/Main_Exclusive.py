@@ -135,6 +135,10 @@ for index,row in df_gen_entrada.iterrows():
 
 
 df_mintecnicos=pd.read_excel("./Insumos/Minimos_Tecnicos.xlsx",header=[6],usecols = ['Central',"Potencia bruta máxima",'Potencia neta máxima',"Potencia bruta mínima (A.T.)"])
+df_preserva = pd.read_excel("./Insumos/Potencia_Reserva.xlsx",header=[3],usecols = ['Fecha','Hora','Hora Mensual','Central',"CPF (-).1","CSF (-).1","CTF (-).1"])
+df_preserva["P_reserva"] = df_preserva[df_preserva.columns[4]] + df_preserva[df_preserva.columns[5]] +df_preserva[df_preserva.columns[6]]
+df_preserva["Fecha_formato"] = df_preserva["Fecha"].apply(lambda x: str(x.year)+"{0:0=2d}".format(x.month)+"{0:0=2d}".format(x.day))
+df_preserva["Fecha_formato"] = df_preserva["Fecha_formato"] + df_preserva["Hora"].apply(lambda x: "{0:0=2d}".format(x))
 #init_time=time.time()
 try:
     #Cuánta generación tendrá la central de estudio
@@ -165,7 +169,7 @@ alg_type=2
 #2-> Envía la central a mínimo técnico.
 costo_cero_alg=2
 
-
+#%%
 output={}
 gen_output={}
 for fecha in dicc_marginal.keys():
@@ -235,10 +239,14 @@ for fecha in dicc_marginal.keys():
     po_bloque.index = po_bloque.index + 1  # shifting index
     po_bloque = po_bloque.sort_index(ascending=True)  # sorting by index
 
+    #Potencia de reserva
+    p_reserva_horaria = df_preserva.loc[df_preserva["Fecha_formato"] == fecha]
+    
     #Asociamos la generación a la PO.
     #Asociamos la generación desde df_generacion a po_bloque.
     po_bloque = pd.merge(po_bloque, df_generacion, on='Central',how="left")
     po_bloque = pd.merge(po_bloque,df_mintecnicos,on="Central",how="left")
+    po_bloque = pd.merge(po_bloque,p_reserva_horaria,on="Central",how="left")
     
     #Agregamos generación infinita a la central Costo Cero.
     po_bloque.loc[po_bloque.Central == "COSTO_CERO", po_bloque.columns[5]] = 999
@@ -250,9 +258,10 @@ for fecha in dicc_marginal.keys():
     po_bloque["Potencia neta máxima"] = po_bloque["Potencia neta máxima"].fillna(0)
     po_bloque["Potencia neta máxima"] = pd.to_numeric(po_bloque["Potencia neta máxima"], errors='coerce').fillna(0)
     po_bloque["Potencia bruta mínima (A.T.)"] = po_bloque["Potencia bruta mínima (A.T.)"].fillna(0)
+    po_bloque["P_reserva"] = po_bloque["P_reserva"].fillna(0)
     
     #Min Tecnico = M/K*R
-    po_bloque["Min_Tecnico"] = po_bloque["Potencia bruta máxima"]/po_bloque["Potencia neta máxima"]*po_bloque["Potencia bruta mínima (A.T.)"]
+    po_bloque["Min_Tecnico"] = po_bloque["Potencia bruta máxima"]/po_bloque["Potencia neta máxima"]*po_bloque["Potencia bruta mínima (A.T.)"] + po_bloque["P_reserva"] #+Potencia de reserva.
     po_bloque["Min_Tecnico"] = po_bloque["Min_Tecnico"].fillna(0)
     
     #Asignamos generación restante igual a generación inicial.
@@ -310,8 +319,7 @@ for fecha in dicc_marginal.keys():
         #print(fecha,hora,periodo_marginacion,gen_req,gen_mintecnico)
         # raise
         # if central=="ELTORO_vlaja1":
-        # raise
-        
+        #raise
         if alg_type==1:
             while gen_req>0:
                 for index,row in intra_horario.iterrows():
