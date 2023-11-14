@@ -82,31 +82,21 @@ Regs_path="./DB/DB_CmgFpen"
 Regs_paths=check_files(Regs_path)
 Regs=[Regs_paths[file] for file in Regs_paths.keys() if ("Registro" in file and ".xlsx" in file)]
 
-#Single df extraction
-df=pd.read_excel(Regs[0],header=[0])
-df["Bloque_horario"]=(df["Mes"].astype(str)
-                      +df["Día"].apply(lambda x:"%02d" % (x,)).astype(str)
-                      +df["Hora"].apply(lambda x:"%02d" % (x,)).astype(str))
+#Multiple df extraction
 dicc_marginal={}
-for bloque in df.groupby("Bloque_horario"):
-    bloquehorario=bloque[0]
-    resumen_marginales = bloque[1].pivot_table(index = [bloque[1].columns[4]],
-                                               aggfunc ='size').to_dict()
-    dicc_marginal.update({bloquehorario:resumen_marginales})
 
+for file in Regs:
+    df=pd.read_excel(file,header=[0])
+    df["Bloque_horario"]=(df["Mes"].astype(str)
+                        +df["Día"].apply(lambda x:"%02d" % (x,)).astype(str)
+                        +df["Hora"].apply(lambda x:"%02d" % (x,)).astype(str))
 
-Cmgs_horarios=[Regs_paths[file] for file in Regs_paths.keys() if ("cmg" in str(file).lower() and ".xlsx" in file)]
+    for bloque in df.groupby("Bloque_horario"):
+        bloquehorario=bloque[0]
+        resumen_marginales = bloque[1].pivot_table(index = [bloque[1].columns[4]],
+                                                aggfunc ='size').to_dict()
+        dicc_marginal.update({bloquehorario:resumen_marginales})
 
-df_cmgs=pd.read_excel(Cmgs_horarios[0],header=[0])
-df_cmgs=df_cmgs.loc[df_cmgs["Barra"]=="QUILLOTA______220"]
-df_cmgs["Fecha"]=(df_cmgs["Mes"].astype(str)
-                  +df_cmgs["Día"].apply(lambda x:"%02d" % (x,)).astype(str)
-                  +df_cmgs["Hora"].apply(lambda x:"%02d" % (x,)).astype(str))
-cmg_reales={}
-for index,row in df_cmgs.iterrows():
-    cmg_reales.update({row["Fecha"]:row["CMg [mills/kWh]"]})
-#%Del block
-del bloque,bloquehorario,df,Regs,Regs_path,Regs_paths,resumen_marginales
 
 #%Algoritmo de la nueva central marginal según bloque horario, usando POs.
 
@@ -114,7 +104,7 @@ POs_path=".\DB\DB_PO"
 POs_paths=check_files(POs_path)
 POs=[POs_paths[file] for file in POs_paths.keys() if "PO" in file]
 
-path="./DB/DB_SSCC/Respaldos_CO_SC_CCA/02 Costos de Oportunidad/Detalle diario"
+path="./DB/DB_SSCC/CCO Diarios"
 CCOs=check_files(path)
 
 
@@ -139,7 +129,20 @@ for index,row in df_gen_entrada.iterrows():
 ##P_Reserva paths
 
 df_mintecnicos=pd.read_excel("./Insumos/Minimos_Tecnicos.xlsx",header=[6],usecols = ['Central',"Potencia bruta máxima",'Potencia neta máxima',"Potencia bruta mínima (A.T.)"])
-#init_time=time.time()
+
+##Yet to process and aggregate per month.
+#P_reserva segun mes
+PR_paths="./Insumos"
+PRs_paths=check_files(PR_paths)
+PRs=[PRs_paths[file] for file in PRs_paths.keys() if "Potencia_Reserva" in file]
+
+for file in PRs:
+    df_preserva = pd.read_excel("./Insumos/Potencia_Reserva_"+str(fecha[:-4])+".xlsx",header=[3],usecols = ['Fecha','Hora','Hora Mensual','Central',"CPF (-).1","CSF (-).1","CTF (-).1"])
+    df_preserva["P_reserva"] = df_preserva[df_preserva.columns[4]] + df_preserva[df_preserva.columns[5]] +df_preserva[df_preserva.columns[6]]
+    df_preserva["Fecha_formato"] = df_preserva["Fecha"].apply(lambda x: str(x.year)+"{0:0=2d}".format(x.month)+"{0:0=2d}".format(x.day))
+    df_preserva["Fecha_formato"] = df_preserva["Fecha_formato"] + df_preserva["Hora"].apply(lambda x: "{0:0=2d}".format(x))
+    #Add to an aggregated dataframe or join with previous one?
+
 try:
     #Cuánta generación tendrá la central de estudio
     gen_cx_estudio=int(sys.argv[1])
@@ -199,11 +202,6 @@ for fecha in dicc_marginal.keys():
     df=pd.read_excel(PO_asociada,sheet_name="TCO",header=6)
     pos_bloque=[df[df.columns[1+i*4:4+i*4]] for i in range(3)]
     
-    #P_reserva segun mes
-    df_preserva = pd.read_excel("./Insumos/Potencia_Reserva_"+str(fecha[:-4])+".xlsx",header=[3],usecols = ['Fecha','Hora','Hora Mensual','Central',"CPF (-).1","CSF (-).1","CTF (-).1"])
-    df_preserva["P_reserva"] = df_preserva[df_preserva.columns[4]] + df_preserva[df_preserva.columns[5]] +df_preserva[df_preserva.columns[6]]
-    df_preserva["Fecha_formato"] = df_preserva["Fecha"].apply(lambda x: str(x.year)+"{0:0=2d}".format(x.month)+"{0:0=2d}".format(x.day))
-    df_preserva["Fecha_formato"] = df_preserva["Fecha_formato"] + df_preserva["Hora"].apply(lambda x: "{0:0=2d}".format(x))
 
     for subdf in pos_bloque:
         subdf.columns=["N","Central","Cmg"]
@@ -614,7 +612,7 @@ fig = go.Figure()
 color_counter = 1
 
 
-for sdf in df_gen_entrada.groupby(by="Fecha"):
+for sdf in c.groupby(by="Fecha"):
     #Quiero obtener el día, para agregarlo como trace.
     dia=str(sdf[0].year)+"{0:0=2d}".format(sdf[0].month)+"{0:0=2d}".format(sdf[0].day)
     fig.add_trace(go.Scatter(x=sdf[1]["Hora"], y=sdf[1]["Pmin"],
