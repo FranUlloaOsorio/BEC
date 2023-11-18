@@ -23,6 +23,9 @@ import time
 debug = True
 init_time=time.time()
 
+init_periodo_estudio = str(input("Fecha inicial del periodo de estudio: "))
+end_periodo_estudio = str(input("Fecha final del periodo de estudio: "))
+
 warnings.filterwarnings('ignore')
 
 def check_files(path):
@@ -72,6 +75,14 @@ def resta_genpo(po,central,valor):
     po_bloque[po_bloque.columns[-1]][idx]=po_bloque[po_bloque.columns[-1]][idx]-valor
     
     
+#Creacion de directorios
+general_dirs = ["DB", "Insumos","./DB/DB_PO","./DB/DB_CmgFpen","./DB/DB_SSCC"]
+for directorio in general_dirs:
+    if not os.path.exists(directorio):
+        os.mkdir(directorio)
+        print("La carpeta ",directorio," ha sido creada")
+
+
 central_estudio="150 MW parejo."
 
 #% Registro centrales marginales por barra
@@ -81,6 +92,9 @@ central_estudio="150 MW parejo."
 Regs_path="./DB/DB_CmgFpen"
 Regs_paths=check_files(Regs_path)
 Regs=[Regs_paths[file] for file in Regs_paths.keys() if ("Registro" in file and ".xlsx" in file)]
+
+if Regs == []:
+    input("Directorio de registros vacío, presione para continuar")
 
 #Multiple df extraction
 dicc_marginal={}
@@ -104,10 +118,16 @@ POs_path=".\DB\DB_PO"
 POs_paths=check_files(POs_path)
 POs=[POs_paths[file] for file in POs_paths.keys() if "PO" in file]
 
+if POs == []:
+    input("Directorio de PO vacío, presione para continuar")
+
 path="./DB/DB_SSCC/CCO Diarios"
 CCOs=check_files(path)
 
+if CCOs == []:
+    input("Directorio de CCOs vacío, presione para continuar")
 
+    
 ##Perfil de generación
 df_gen_entrada=pd.read_excel("./Insumos/Entrada_Modelo.xlsx",header=[0])
 df_gen_entrada.columns=["Fecha","Hora","Pmax","Pmin","CV"]
@@ -137,7 +157,7 @@ PRs_paths=check_files(PR_paths)
 PRs=[PRs_paths[file] for file in PRs_paths.keys() if "Potencia_Reserva" in file]
 
 for file in PRs:
-    df_preserva = pd.read_excel("./Insumos/Potencia_Reserva_"+str(fecha[:-4])+".xlsx",header=[3],usecols = ['Fecha','Hora','Hora Mensual','Central',"CPF (-).1","CSF (-).1","CTF (-).1"])
+    df_preserva = pd.read_excel(file,header=[3],usecols = ['Fecha','Hora','Hora Mensual','Central',"CPF (-).1","CSF (-).1","CTF (-).1"])
     df_preserva["P_reserva"] = df_preserva[df_preserva.columns[4]] + df_preserva[df_preserva.columns[5]] +df_preserva[df_preserva.columns[6]]
     df_preserva["Fecha_formato"] = df_preserva["Fecha"].apply(lambda x: str(x.year)+"{0:0=2d}".format(x.month)+"{0:0=2d}".format(x.day))
     df_preserva["Fecha_formato"] = df_preserva["Fecha_formato"] + df_preserva["Hora"].apply(lambda x: "{0:0=2d}".format(x))

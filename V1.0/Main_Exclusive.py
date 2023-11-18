@@ -23,6 +23,9 @@ import time
 debug = True
 init_time=time.time()
 
+init_periodo_estudio = str(input("Fecha inicial del periodo de estudio"))
+end_periodo_estudio = str(input("Fecha final del periodo de estudio"))
+
 warnings.filterwarnings('ignore')
 
 def check_files(path):
