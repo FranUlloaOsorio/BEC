@@ -8,13 +8,15 @@ Si los archivos de entrada han sido incorporados correctamente, entonces el mode
 
 Para esto, el programa requerirá ingresar el periodo de estudio de la siguiente manera:
 
-- Periodo de inicio del estudio en formato: AAAAMMDDHH
-- Periodo de término del estudio en formato: AAAAMMDDHH
+- Periodo de inicio del estudio en formato: AAAAMMDD
+- Periodo de término del estudio en formato: AAAAMMDD
 
 .. image:: images/Prompt_inicial.jpg
   :width: 400
   :align: center
   :alt: Alternative text
+
+|
 
 Una vez ingresados estos valores, el programa comenzará la carga de archivos y la revisión de documentos para iniciar la simulación.
 
@@ -30,7 +32,18 @@ Al terminar la simulación, existirán dos archivos principales de salida:
    :page-index: 1
    :export-scale: 150
 
+|
+
 - **Costos Marginales.xlsx**
    - Este archivo contiene los valores horarios del costo marginal original y nuevo costo marginal calculado en la simulación.
+
+   .. image:: images/CMgS.jpg
+      :align: center
+      :alt: Alternative text
+
 - **Generación de la central.xlsx**
    - Este archivo contiene la generación simulada de la central de estudio por bloque horario, bajo las reglas descritas por el algoritmo de simulación.
+
+   .. image:: images/Gen.jpg
+      :align: center
+      :alt: Alternative text

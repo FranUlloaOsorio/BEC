@@ -22,6 +22,10 @@ La carpeta de insumos está compuesta por una serie de archivos que son utilizad
 * Archivos de potencia de reserva
    - Poseen un formato definido: **Potencia_Reserva_<año+mes>.xlsx** y corresponden al archivo de potencia de reserva con desglose.
 
+   .. image:: images/Insumos.jpg
+      :align: center
+      :alt: Alternative text
+
 Carpeta de DB
 ________________
 
@@ -30,8 +34,20 @@ La carpeta de DB contiene los archivos que tienen información horaria sobre los
 - **Carpeta DB_CmgFpen**
    - La carpeta contiene los registros de centrales marginales por barra para un periodo mensual determinado.
 
+   .. image:: images/RegistroCXBarras.jpg
+      :align: center
+      :alt: Alternative text
+
 - **Carpeta DB_PO**
    - La carpeta contiene los archivos correspondientes a las políticas de operación diarias.
 
+   .. image:: images/POs.jpg
+      :align: center
+      :alt: Alternative text
+
 - **Carpeta DB_CmgFpen**
    - La carpeta contiene los detalles de costo de oportunidad diarios.
+
+   .. image:: images/CCOs.jpg
+      :align: center
+      :alt: Alternative text

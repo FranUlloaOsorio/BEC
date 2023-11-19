@@ -11,7 +11,6 @@ Welcome to Simulador BEC's documentation!
 .. toctree::
    general
    usage
-   formatos
    :maxdepth: 2
    :caption: Contents:
 

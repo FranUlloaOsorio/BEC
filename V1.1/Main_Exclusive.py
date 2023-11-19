@@ -18,7 +18,7 @@ import sys
 import linecache
 import warnings
 import time
-
+from datetime import date, timedelta
 
 debug = True
 init_time=time.time()
@@ -136,6 +136,7 @@ df_gen_entrada["Date"]=None
 ##Dateformat entry for the simulator:
 ##YYYYMMDDHH
 
+
 for index,row in df_gen_entrada.iterrows():
     actual = row["Fecha"]
     hora = row["Hora"]
@@ -156,12 +157,16 @@ PR_paths="./Insumos"
 PRs_paths=check_files(PR_paths)
 PRs=[PRs_paths[file] for file in PRs_paths.keys() if "Potencia_Reserva" in file]
 
+potencias_reserva = pd.DataFrame()
+
 for file in PRs:
     df_preserva = pd.read_excel(file,header=[3],usecols = ['Fecha','Hora','Hora Mensual','Central',"CPF (-).1","CSF (-).1","CTF (-).1"])
     df_preserva["P_reserva"] = df_preserva[df_preserva.columns[4]] + df_preserva[df_preserva.columns[5]] +df_preserva[df_preserva.columns[6]]
     df_preserva["Fecha_formato"] = df_preserva["Fecha"].apply(lambda x: str(x.year)+"{0:0=2d}".format(x.month)+"{0:0=2d}".format(x.day))
     df_preserva["Fecha_formato"] = df_preserva["Fecha_formato"] + df_preserva["Hora"].apply(lambda x: "{0:0=2d}".format(x))
-    #Add to an aggregated dataframe or join with previous one?
+    potencias_reserva = potencias_reserva.append(df_preserva)
+    
+potencias_reserva = potencias_reserva.drop_duplicates()
 
 try:
     #Cuánta generación tendrá la central de estudio
@@ -181,7 +186,6 @@ except:
 print(sys.argv)
 print(cmg_central_estudio,mintec_cx_estudio)
 
-
 #Cuál es el algoritmo utilizado para remover generación.
 #1 -> Remover máx generación
 #2 -> Algoritmo establecido en Campiche.
@@ -192,10 +196,21 @@ alg_type=2
 #2-> Envía la central a mínimo técnico.
 costo_cero_alg=2
 
-#%%
+fechas_estudio = []
+start_dt = date(int(init_periodo_estudio[:4]), int(init_periodo_estudio[4:6]), int(init_periodo_estudio[6:8]))
+end_dt = date(int(end_periodo_estudio[:4]), int(end_periodo_estudio[4:6]), int(end_periodo_estudio[6:8]))
+deltafechas = timedelta(days=1)
+while start_dt <= end_dt:
+    fechas_estudio.append(start_dt.isoformat())
+    start_dt+=deltafechas
+
+fechas_estudio = [x.replace("-","")+"{0:0=2d}".format(k) for x in fechas_estudio for k in range(1,25)]
+
 output={}
 gen_output={}
 for fecha in dicc_marginal.keys():
+    if fecha not in fechas_estudio:
+        continue
     # if not fecha in (["20230701"+"%02d" % (x,) for x in range(1,25)]):
     # +["20230702"+"%02d" % (x,) for x in range(1,25)]):
     # if not fecha =="2023070118":
@@ -263,7 +278,7 @@ for fecha in dicc_marginal.keys():
     po_bloque = po_bloque.sort_index(ascending=True)  # sorting by index
 
     #Potencia de reserva
-    p_reserva_horaria = df_preserva.loc[df_preserva["Fecha_formato"] == fecha]
+    p_reserva_horaria = potencias_reserva.loc[potencias_reserva["Fecha_formato"] == fecha]
     
     #Asociamos la generación a la PO.
     #Asociamos la generación desde df_generacion a po_bloque.
