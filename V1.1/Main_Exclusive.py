@@ -164,7 +164,7 @@ for file in PRs:
     df_preserva["P_reserva"] = df_preserva[df_preserva.columns[4]] + df_preserva[df_preserva.columns[5]] +df_preserva[df_preserva.columns[6]]
     df_preserva["Fecha_formato"] = df_preserva["Fecha"].apply(lambda x: str(x.year)+"{0:0=2d}".format(x.month)+"{0:0=2d}".format(x.day))
     df_preserva["Fecha_formato"] = df_preserva["Fecha_formato"] + df_preserva["Hora"].apply(lambda x: "{0:0=2d}".format(x))
-    potencias_reserva = potencias_reserva.append(df_preserva)
+    potencias_reserva = potencias_reserva._append(df_preserva)
     
 potencias_reserva = potencias_reserva.drop_duplicates()
 
@@ -558,11 +558,7 @@ for fecha in dicc_marginal.keys():
     
     #raise
 
-#%% Visualization block
-import plotly.io as pio
-pio.renderers.default='browser'
-import plotly.express as px
-import plotly.graph_objects as go
+
 df=pd.DataFrame(columns=["Día","Hora","Nuevo CMg", "CMg Original"])
 
 for key in output.keys():
@@ -571,65 +567,8 @@ for key in output.keys():
     hora=fecha[-2::]
     df.loc[len(df)+1]=[dia,hora,output[key][0],output[key][1]]
 
-#fig = px.line(df, x="Hora", y="Nuevo CMg", color="Día",markers=True)
-fig = go.Figure()
-color_counter=0
-for sdf in df.groupby("Día"):
-    fig.add_trace(go.Scatter(x=sdf[1]["Hora"], y=sdf[1]["CMg Original"],
-                    mode='lines+markers',
-                    marker_color=fig.layout['template']['layout']['colorway'][color_counter],
-                    name='Marginal real',legendgroup=sdf[0],  # this can be any string, not just "group"
-    legendgrouptitle_text=sdf[0]))
-    
-    fig.add_trace(go.Scatter(x=sdf[1]["Hora"], y=sdf[1]["Nuevo CMg"],
-                    mode='lines+markers',
-                    marker_color=fig.layout['template']['layout']['colorway'][color_counter],
-                    name='Nuevo Marginal',legendgroup=sdf[0],
-                    line=dict(dash="dash"),
-    legendgrouptitle_text=sdf[0]))
-    color_counter+=1
-    if color_counter==10:
-        color_counter=0
+df.to_excel("Nuevos_CMgs.xlsx",header=True,index=False)
 
-
-
-df_cmgs["Fecha_Index"]=(df_cmgs["Mes"].astype(str)
-                  +df_cmgs["Día"].apply(lambda x:"%02d" % (x,)).astype(str))
-df_cmgs["Hora"]=df_cmgs["Hora"].apply(lambda x:"%02d" % (int(x),)).astype(str)
-
-color_counter=1
-for sdf in df_cmgs.groupby("Fecha_Index"):
-    fig.add_trace(go.Scatter(x=sdf[1]["Hora"], y=sdf[1]["CMg [mills/kWh]"],
-                    mode='lines+markers',
-                    marker_color=fig.layout['template']['layout']['colorway'][color_counter],
-                    name='Marginal real reportado',legendgroup=sdf[0],
-                    line=dict(dash="dot"),
-    legendgrouptitle_text=sdf[0]))
-    color_counter+=1
-    if color_counter==10:
-        color_counter=0
-    
-
-    
-    
-    
-    color_counter+=1
-    if color_counter==10:
-        color_counter=0
-
-fig.update_layout(
-    title="Nuevo Costo Marginal calculado vs Marginal real en el periodo de estudio para la central "+str(central_estudio)+" Caso "+str(cmg_central_estudio)+"_"+str(mintec_cx_estudio),
-    xaxis_title="Hora del día",
-    yaxis_title="Costo Marginal [$US/MWh]",
-    legend_title="Periodo de estudio",
-)
-
-
-fig.show()
-#fig.write_html("Nuevos_CMgs.html")
-#df.to_excel("Nuevos_CMgs.xlsx",header=True,index=False)
-df.to_excel("Nuevos_CMgs"+str(cmg_central_estudio)+"_"+str(mintec_cx_estudio)+".xlsx",header=True,index=False)
-fig.write_html("Nuevos_CMgs"+str(cmg_central_estudio)+"_"+str(mintec_cx_estudio)+".html")
 
 
 df=pd.DataFrame(columns=["Día","Hora","Gen",])
@@ -640,52 +579,4 @@ for key in gen_output.keys():
     df.loc[len(df)+1]=[dia,hora,gen_output[key]]
 
     
-
-#fig = px.line(df, x="Hora", y="Nuevo CMg", color="Día",markers=True)
-
-fig = go.Figure()
-color_counter = 1
-
-
-for sdf in c.groupby(by="Fecha"):
-    #Quiero obtener el día, para agregarlo como trace.
-    dia=str(sdf[0].year)+"{0:0=2d}".format(sdf[0].month)+"{0:0=2d}".format(sdf[0].day)
-    fig.add_trace(go.Scatter(x=sdf[1]["Hora"], y=sdf[1]["Pmin"],
-                    mode='markers',
-                    marker_color=fig.layout['template']['layout']['colorway'][color_counter],
-                    name='Generación - Archivo Entrada',legendgroup=dia,
-                    legendgrouptitle_text=dia))
-    
-    color_counter+=1
-    if color_counter==10:
-        color_counter=0
-
-color_counter = 0 
-
-for sdf in df.groupby("Día"):
-    fig.add_trace(go.Scatter(x=sdf[1]["Hora"], y=sdf[1]["Gen"].apply(lambda x: round(x,3)),
-                    mode='lines',
-                    marker_color=fig.layout['template']['layout']['colorway'][color_counter],
-                    name='Generación Simulada',legendgroup=sdf[0],  # this can be any string, not just "group"
-    legendgrouptitle_text=sdf[0]))
-    
-    color_counter+=1
-    if color_counter==10:
-        color_counter=0
-
-
-
-fig.update_layout(
-    title="Generación para la central "+str(central_estudio),
-    xaxis_title="Hora del día",
-    yaxis_title="Generación [MW]",
-    legend_title="Periodo de estudio",
-)
-
-
-fig.show()
-fig.write_html("Generacion"+str(cmg_central_estudio)+"_"+str(mintec_cx_estudio)+".html")
-df.to_excel("Generacion"+str(cmg_central_estudio)+"_"+str(mintec_cx_estudio)+".xlsx",header=True,index=False)
-
-print(time.time()-init_time)
-sys.exit(0)
+df.to_excel("Generacion.xlsx",header=True,index=False)
