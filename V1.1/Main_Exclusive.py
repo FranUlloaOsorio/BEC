@@ -19,10 +19,17 @@ import linecache
 import warnings
 import time
 from datetime import date, timedelta
+import logging
+
+logging.basicConfig(filename="simulacion.log", 
+					format='%(asctime)s %(message)s', 
+					filemode='w') 
+
+logger=logging.getLogger() 
+logger.setLevel(logging.DEBUG) 
 
 debug = True
 init_time=time.time()
-
 init_periodo_estudio = str(input("Fecha inicial del periodo de estudio: "))
 end_periodo_estudio = str(input("Fecha final del periodo de estudio: "))
 
@@ -80,7 +87,8 @@ general_dirs = ["DB", "Insumos","./DB/DB_PO","./DB/DB_CmgFpen","./DB/DB_SSCC"]
 for directorio in general_dirs:
     if not os.path.exists(directorio):
         os.mkdir(directorio)
-        print("La carpeta ",directorio," ha sido creada")
+        logger.info("La carpeta "+directorio+" ha sido creada")
+        
 
 
 central_estudio="150 MW parejo."
@@ -94,6 +102,7 @@ Regs_paths=check_files(Regs_path)
 Regs=[Regs_paths[file] for file in Regs_paths.keys() if ("Registro" in file and ".xlsx" in file)]
 
 if Regs == []:
+    logger.info("Directorio de registros vacío")
     input("Directorio de registros vacío, presione para continuar")
 
 #Multiple df extraction
@@ -119,13 +128,17 @@ POs_paths=check_files(POs_path)
 POs=[POs_paths[file] for file in POs_paths.keys() if "PO" in file]
 
 if POs == []:
+    logger.info("Directorio de PO vacío")
     input("Directorio de PO vacío, presione para continuar")
+    
 
 path="./DB/DB_SSCC/CCO Diarios"
 CCOs=check_files(path)
 
 if CCOs == []:
+    logger.info("Directorio de CCOs vacío")
     input("Directorio de CCOs vacío, presione para continuar")
+    
 
     
 ##Perfil de generación
@@ -205,9 +218,10 @@ while start_dt <= end_dt:
     start_dt+=deltafechas
 
 fechas_estudio = [x.replace("-","")+"{0:0=2d}".format(k) for x in fechas_estudio for k in range(1,25)]
-
+##%%
 output={}
 gen_output={}
+#fechas_estudio = ["2023070108"]
 for fecha in dicc_marginal.keys():
     if fecha not in fechas_estudio:
         continue
@@ -264,13 +278,13 @@ for fecha in dicc_marginal.keys():
     #Seleccionamos bloque según hora
     if int(hora) in list(range(9)):
         po_bloque=pos_bloque[0]
-        print("Usando PO bloque 1")
+        logger.debug("Usando PO bloque 1")
     elif int(hora) in list(range(9,19)):
         po_bloque=pos_bloque[1]
-        print("Usando PO bloque 2")
+        logger.debug("Usando PO bloque 2")
     elif int(hora) in list(range(19,25)):
         po_bloque=pos_bloque[2]
-        print("Usando PO bloque 3")
+        logger.debug("Usando PO bloque 3")
         
     #Agregamos Central Costo Cero
     po_bloque.loc[-1]=[0,"COSTO_CERO",0]
@@ -325,13 +339,17 @@ for fecha in dicc_marginal.keys():
     #Algoritmo para ordenar las centrales según costo marginal.
     for central in cx.keys():
         if debug:
-            print("\n\n")
+            #print("\n\n")
+            logger.debug(fecha)
+            logger.debug("Costo marginal, minimo tecnico y generación requerida de la central de estudio en esta hora")
             print(fecha)
+            logger.debug(",".join([str(x) for x in [cmg_central_estudio,mintec_cx_estudio,gen_cx_estudio]]))
             print(cmg_central_estudio,mintec_cx_estudio,gen_cx_estudio)
         #Periodo de marginación, hora del bloque
         periodo_marginacion=cx[central][0]
         periodo_marginacion_acumulado+=periodo_marginacion
         print(periodo_marginacion)
+        logger.debug("Duracion subperiodo: " + str(periodo_marginacion))
         #Consideramos también la existencia de los mínimos técnicos.
         gen_req=gen_cx_estudio*periodo_marginacion/60
         gen_max=gen_req
@@ -408,7 +426,8 @@ for fecha in dicc_marginal.keys():
                     gen=(po_bloque.iloc[index,5]-row["Min_Tecnico"])*periodo_marginacion/periodo_marginacion_acumulado
                     # if periodo_marginacion==16:
                         # raise
-                    print("Central, Cmg, Gen_req, Min Tecnico, Gen_Central_Actual_Prorrateada_ConMT, Unidad")
+                    print("Central, Cmg, Generacion requerida para el subperiodo, Min Tecnico de la central, Gen Central en el supberiodo, Unidad")
+                    logger.debug("Central, Cmg, Generacion requerida para el subperiodo, Min Tecnico de la central, Gen Central en el supberiodo, Unidad")
                     if debug:
                         print(row["Central"],
                               row["Cmg"],
@@ -418,7 +437,7 @@ for fecha in dicc_marginal.keys():
                               #row[po_bloque.columns[5]]*periodo_marginacion/60,
                               gen,
                               row["Gen Neta [MWh]"])
-                    
+                        logger.debug(",".join([str(x) for x in [row["Central"],row["Cmg"],gen_req,row["Min_Tecnico"],gen,row["Gen Neta [MWh]"]]]))
                     # if row["Central"]=="CANDELARIA-1_GNL_C":
                         # raise
                     
@@ -429,6 +448,7 @@ for fecha in dicc_marginal.keys():
                     if cmg_actual>=cmg_central_estudio and gen_req>=gen:
                         if debug:
                             print("Caso1")
+                            logger.debug("Caso1")
                         resta_genpo(po_bloque, row["Central"], gen)
                         #intra_horario.iloc[index,10]=0
                         gen_req=gen_req-gen
@@ -441,6 +461,7 @@ for fecha in dicc_marginal.keys():
                     elif cmg_actual<cmg_central_estudio and gen_req>=gen:
                         if debug:
                             print("Caso2")
+                            logger.debug("Caso2")
                         #Si la central aún no genera a mínimo técnico, entonces
                         #removemos la energía necesaria y evaluamos.
                         #Si lo que generé es menor que el mínimo técnico
@@ -489,6 +510,7 @@ for fecha in dicc_marginal.keys():
                     elif gen_req<gen and cmg_actual>=cmg_central_estudio:
                         if debug:
                             print("Caso3")
+                            logger.debug("Caso3")
                         aux_updatedict(new_cmgs,row["Central"],[row["Cmg"],periodo_marginacion],1)
                         gen_req=0
                         resta_genpo(po_bloque, row["Central"], gen_req)
@@ -502,6 +524,7 @@ for fecha in dicc_marginal.keys():
                     elif gen_req<gen and cmg_actual<cmg_central_estudio:
                         if debug:
                             print("Caso4")
+                            logger.debug("Caso4")
                         #Si la central aún no genera a mínimo técnico, entonces
                         #removemos la energía necesaria y evaluamos.
                         #Si lo que generé es menor que el mínimo técnico
