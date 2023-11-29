@@ -30,8 +30,8 @@ logger.setLevel(logging.DEBUG)
 
 debug = True
 init_time=time.time()
-init_periodo_estudio = str(input("Fecha inicial del periodo de estudio: "))
-end_periodo_estudio = str(input("Fecha final del periodo de estudio: "))
+init_periodo_estudio = str(input("Fecha inicial del periodo de estudio (AAAAMMDDHH) : "))
+end_periodo_estudio = str(input("Fecha final del periodo de estudio (AAAAMMDDHH) :"))
 
 warnings.filterwarnings('ignore')
 
@@ -424,6 +424,8 @@ for fecha in dicc_marginal.keys():
                     #Obtenemos la generación (restante) y se pondera por el periodo de marginación.
                     # gen=row["Gen_Restante"]*periodo_marginacion/60
                     gen=(po_bloque.iloc[index,5]-row["Min_Tecnico"])*periodo_marginacion/periodo_marginacion_acumulado
+                    if gen <0:
+                        gen = 0
                     # if periodo_marginacion==16:
                         # raise
                     print("Central, Cmg, Generacion requerida para el subperiodo, Min Tecnico de la central, Gen Central en el supberiodo, Unidad")
